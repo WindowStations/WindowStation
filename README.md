@@ -3,6 +3,8 @@ Secure alternate desktop shell with taskbar, start menu, and gamepad support.
 
 To disconnect xinput to apps use WTSDiscconect.exe.  This will allow the Mouse-Only setting in the button mapping dialog window.  You can navigate app Windows with the mouse rather than the silly selector rectangle.
 
+Code:
+
 ```
 Const WTS_CURRENT_SESSION       As Long = -1
 Const WTS_CURRENT_SERVER_HANDLE As Long = 0
