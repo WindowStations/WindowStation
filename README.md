@@ -46,7 +46,8 @@ Windows Registry Editor Version 5.00
 "Configuration"="xinp"
 ```
 
-Be sure to edit the registry value for StartExe, after you import it into the registry.  Update the registry string rather than the hex.
+Be sure to edit the registry value for StartExe, after you import it into the registry, ie update the registry string rather than the hex.
+
 To uninstall from boot/uac:
 ```
 Windows Registry Editor Version 5.00
