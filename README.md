@@ -45,7 +45,9 @@ Windows Registry Editor Version 5.00
 "TerminateOnDesktopSwitch"=dword:00000000
 
 [HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Accessibility\Session1]
-"SecureConfiguration"=""
+"Configuration"="xinp"
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Accessibility]
 "Configuration"="xinp"
 ```
 
