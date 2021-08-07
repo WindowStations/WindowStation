@@ -1,7 +1,7 @@
 # WindowStation
 Secure alternate desktop shell with taskbar, start menu, and gamepad support.
 
-To disconnect xinput to apps use WTSDisconnect.exe.  This will allow the Mouse-Only setting in the button mapping dialog window.  You can navigate app Windows with the mouse rather than the silly selector rectangle.
+To disconnect xinput to apps use WTSDisconnect.exe.  You can navigate app Windows with the mouse rather than the silly selector rectangle.
 
 Code:
 
