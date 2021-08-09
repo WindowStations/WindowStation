@@ -1,59 +1,258 @@
 # WindowStation
 Secure alternate desktop shell with taskbar, start menu, and gamepad support.
 
-To disconnect xinput to apps use WTSDisconnect.exe.  You can navigate app Windows with the mouse rather than the silly selector rectangle.
+Here is a Powershell script to start the application as an alternate boot shell (Windows 10 enterprise/education).
 
-Code:
+Requires (v1909) to setup a bootable image on portable SSD.
 
 ```
-Const WTS_CURRENT_SESSION       As Long = -1
-Const WTS_CURRENT_SERVER_HANDLE As Long = 0
-Private Declare Function apiWTSDisconnectSession Lib "wtsapi32" Alias "WTSDisconnectSession" (ByVal hServer As Long, ByVal SessionID As Long, ByVal bWait As Boolean) As Boolean
-Private Declare Function apiWTSOpenServer Lib "wtsapi32" Alias "WTSOpenServer" (ByVal pServerName As String) As Long
-Private Declare Function apiWTSCloseServer Lib "wtsapi32" Alias "WTSCloseServer" (ByVal hServer As Long) As Boolean
-Sub main()
-   DissconnectSession
-End Sub
-Private Function DissconnectSession(Optional ByVal ServerName As String, Optional ByVal SessionID As Long) As Boolean
-   On Error Resume Next
-   Dim OpenedServer As Long
-   OpenedServer = WTS_CURRENT_SERVER_HANDLE
-   If ServerName <> "" Then OpenedServer = apiWTSOpenServer(ServerName)
-   If SessionID = 0 Then SessionID = WTS_CURRENT_SESSION
-   DissconnectSession = apiWTSDisconnectSession(OpenedServer, SessionID, False)
-   Call apiWTSCloseServer(OpenedServer)
-End Function
+# Check if shell launcher license is enabled
+function Check-ShellLauncherLicenseEnabled
+{
+    [string]$source = @"
+using System;
+using System.Runtime.InteropServices;
+
+static class CheckShellLauncherLicense
+{
+    const int S_OK = 0;
+
+    public static bool IsShellLauncherLicenseEnabled()
+    {
+        int enabled = 0;
+
+        if (NativeMethods.SLGetWindowsInformationDWORD("EmbeddedFeature-ShellLauncher-Enabled", out enabled) != S_OK) {
+            enabled = 0;
+        }
+        return (enabled != 0);
+    }
+
+    static class NativeMethods
+    {
+        [DllImport("Slc.dll")]
+        internal static extern int SLGetWindowsInformationDWORD([MarshalAs(UnmanagedType.LPWStr)]string valueName, out int value);
+    }
+
+}
+"@
+
+    $type = Add-Type -TypeDefinition $source -PassThru
+
+    return $type[0]::IsShellLauncherLicenseEnabled()
+}
+
+[bool]$result = $false
+
+$result = Check-ShellLauncherLicenseEnabled
+"`nShell Launcher license enabled is set to " + $result
+if (-not($result))
+{
+    "`nThis device doesn&#39;t have required license to use Shell Launcher"
+    exit
+}
+
+$COMPUTER = "localhost"
+$NAMESPACE = "root\standardcimv2\embedded"
+
+# Create a handle to the class instance so we can call the static methods.
+try {
+    $ShellLauncherClass = [wmiclass]"\\$COMPUTER\${NAMESPACE}:WESL_UserSetting"
+    } catch [Exception] {
+    write-host $_.Exception.Message; 
+    write-host "Make sure Shell Launcher feature is enabled"
+    exit
+    }
+
+
+# This well-known security identifier (SID) corresponds to the BUILTIN\Administrators group.
+
+$Admins_SID = "S-1-5-32-544"
+
+# Create a function to retrieve the SID for a user account on a machine.
+
+function Get-UsernameSID($AccountName) {
+
+    $NTUserObject = New-Object System.Security.Principal.NTAccount($AccountName)
+    $NTUserSID = $NTUserObject.Translate([System.Security.Principal.SecurityIdentifier])
+
+    return $NTUserSID.Value
+}
+
+# Get the SID for a user account named "Cashier". Rename "Cashier" to an existing account on your system to test this script.
+
+$Cashier_SID = Get-UsernameSID("Owner")
+
+# Define actions to take when the shell program exits.
+
+$restart_shell = 0
+$restart_device = 1
+$shutdown_device = 2
+$do_nothing = 3
+
+# Examples. You can change these examples to use the program that you want to use as the shell.
+
+# This example sets the command prompt as the default shell, and restarts the device if the command prompt is closed. 
+
+$ShellLauncherClass.SetDefaultShell("cmd.exe", $restart_device)
+
+# Display the default shell to verify that it was added correctly.
+
+$DefaultShellObject = $ShellLauncherClass.GetDefaultShell()
+
+"`nDefault Shell is set to " + $DefaultShellObject.Shell + " and the default action is set to " + $DefaultShellObject.defaultaction
+
+# Set Internet Explorer as the shell for "Cashier", and restart the machine if Internet Explorer is closed.
+
+$ShellLauncherClass.SetCustomShell($Cashier_SID, "C:\WindowStations.exe", ($null), ($null), $restart_shell)
+
+# Set Explorer as the shell for administrators.
+
+$ShellLauncherClass.SetCustomShell($Admins_SID, "WindowStations.exe")
+
+# View all the custom shells defined.
+
+"`nCurrent settings for custom shells:"
+Get-WmiObject -namespace $NAMESPACE -computer $COMPUTER -class WESL_UserSetting | Select Sid, Shell, DefaultAction
+
+# Enable Shell Launcher
+
+$ShellLauncherClass.SetEnabled($TRUE)
+
+$IsShellLauncherEnabled = $ShellLauncherClass.IsEnabled()
+
+"`nEnabled is set to " + $IsShellLauncherEnabled.Enabled
 ```
 
-You can configure the gamepad driver to work on the Winlogon desktop at boot and at UAC prompts.
+Remove the alternate shell from boot:
 
-Registry editor code:
 ```
-Windows Registry Editor Version 5.00
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Accessibility\ATs\xinp]
-"ApplicationName"=hex(2):57,00,69,00,6e,00,64,00,6f,00,77,00,47,00,61,00,6d,00,\
-  65,00,70,00,61,00,64,00,00,00
-"ATExe"="WindowGamepad.exe"
-"CopySettingsToLockedDesktop"=dword:00000001
-"Description"="Xinput Mouse"
-"Profile"="<HCIModel><Accommodation type=\"severe dexterity\" /><Accommodation type=\"mild dexterity\" /></HCIModel>"
-"SimpleProfile"="xinp"
-"StartExe"=hex(2):45,00,3a,00,5c,00,57,00,69,00,6e,00,64,00,6f,00,77,00,53,00,\
-  74,00,61,00,74,00,69,00,6f,00,6e,00,5c,00,57,00,69,00,6e,00,64,00,6f,00,77,\
-  00,4c,00,61,00,75,00,6e,00,63,00,68,00,65,00,72,00,5c,00,57,00,69,00,6e,00,\
-  64,00,6f,00,77,00,47,00,61,00,6d,00,65,00,70,00,61,00,64,00,2e,00,65,00,78,\
-  00,65,00,00,00
-"TerminateOnDesktopSwitch"=dword:00000000
-"StartParams"="/uac"
+# Check if shell launcher license is enabled
+function Check-ShellLauncherLicenseEnabled
+{
+    [string]$source = @"
+using System;
+using System.Runtime.InteropServices;
 
-[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Accessibility]
-"Configuration"="xinp"
-```
+static class CheckShellLauncherLicense
+{
+    const int S_OK = 0;
 
-Be sure to edit the registry value for StartExe, after you import it into the registry, ie update the registry string rather than the hex.
+    public static bool IsShellLauncherLicenseEnabled()
+    {
+        int enabled = 0;
 
-To uninstall from boot/uac:
-```
-Windows Registry Editor Version 5.00
-[-HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Accessibility\ATs\xinp]
+        if (NativeMethods.SLGetWindowsInformationDWORD("EmbeddedFeature-ShellLauncher-Enabled", out enabled) != S_OK) {
+            enabled = 0;
+        }
+        return (enabled != 0);
+    }
+
+    static class NativeMethods
+    {
+        [DllImport("Slc.dll")]
+        internal static extern int SLGetWindowsInformationDWORD([MarshalAs(UnmanagedType.LPWStr)]string valueName, out int value);
+    }
+
+}
+"@
+
+    $type = Add-Type -TypeDefinition $source -PassThru
+
+    return $type[0]::IsShellLauncherLicenseEnabled()
+}
+
+[bool]$result = $false
+
+$result = Check-ShellLauncherLicenseEnabled
+"`nShell Launcher license enabled is set to " + $result
+if (-not($result))
+{
+    "`nThis device doesn&#39;t have required license to use Shell Launcher"
+    exit
+}
+
+$COMPUTER = "localhost"
+$NAMESPACE = "root\standardcimv2\embedded"
+
+# Create a handle to the class instance so we can call the static methods.
+try {
+    $ShellLauncherClass = [wmiclass]"\\$COMPUTER\${NAMESPACE}:WESL_UserSetting"
+    } catch [Exception] {
+    write-host $_.Exception.Message; 
+    write-host "Make sure Shell Launcher feature is enabled"
+    exit
+    }
+
+
+# This well-known security identifier (SID) corresponds to the BUILTIN\Administrators group.
+
+$Admins_SID = "S-1-5-32-544"
+
+# Create a function to retrieve the SID for a user account on a machine.
+
+function Get-UsernameSID($AccountName) {
+
+    $NTUserObject = New-Object System.Security.Principal.NTAccount($AccountName)
+    $NTUserSID = $NTUserObject.Translate([System.Security.Principal.SecurityIdentifier])
+
+    return $NTUserSID.Value
+}
+
+# Get the SID for a user account named "Cashier". Rename "Cashier" to an existing account on your system to test this script.
+
+$Cashier_SID = Get-UsernameSID("Owner")
+
+# Define actions to take when the shell program exits.
+
+$restart_shell = 0
+$restart_device = 1
+$shutdown_device = 2
+$do_nothing = 3
+
+# Examples. You can change these examples to use the program that you want to use as the shell.
+
+# This example sets the command prompt as the default shell, and restarts the device if the command prompt is closed. 
+
+$ShellLauncherClass.SetDefaultShell("cmd.exe", $restart_device)
+
+# Display the default shell to verify that it was added correctly.
+
+$DefaultShellObject = $ShellLauncherClass.GetDefaultShell()
+
+"`nDefault Shell is set to " + $DefaultShellObject.Shell + " and the default action is set to " + $DefaultShellObject.defaultaction
+
+# Set Internet Explorer as the shell for "Cashier", and restart the machine if Internet Explorer is closed.
+
+$ShellLauncherClass.SetCustomShell($Cashier_SID, "C:\WindowStations.exe", ($null), ($null), $restart_shell)
+
+# Set Explorer as the shell for administrators.
+
+$ShellLauncherClass.SetCustomShell($Admins_SID, "WindowStations.exe")
+
+# View all the custom shells defined.
+
+"`nCurrent settings for custom shells:"
+Get-WmiObject -namespace $NAMESPACE -computer $COMPUTER -class WESL_UserSetting | Select Sid, Shell, DefaultAction
+
+# Enable Shell Launcher
+
+$ShellLauncherClass.SetEnabled($TRUE)
+
+$IsShellLauncherEnabled = $ShellLauncherClass.IsEnabled()
+
+"`nEnabled is set to " + $IsShellLauncherEnabled.Enabled
+
+# Remove the new custom shells.
+
+$ShellLauncherClass.RemoveCustomShell($Admins_SID)
+
+$ShellLauncherClass.RemoveCustomShell($Cashier_SID)
+
+# Disable Shell Launcher
+
+$ShellLauncherClass.SetEnabled($FALSE)
+
+$IsShellLauncherEnabled = $ShellLauncherClass.IsEnabled()
+
+"`nEnabled is set to " + $IsShellLauncherEnabled.Enabled
 ```
