@@ -1,7 +1,7 @@
 # WindowStation
 Secure alternate desktop shell with taskbar, start menu, and gamepad support.
 
-Here is a Powershell script to start the application as an alternate boot shell (Windows 10 enterprise/education).
+Optional - Here is a Powershell script to start the application as an alternate boot shell (Windows 10 enterprise/education).
 
 Requires (v1909) to setup a bootable image on portable SSD.
 
